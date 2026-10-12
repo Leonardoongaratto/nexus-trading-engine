@@ -1,0 +1,63 @@
+from xau_bot.backtest.analysis import (
+    BacktestAnalysisReport,
+    BacktestAnalyzer,
+    Gate1Evaluation,
+    MonteCarloConfig,
+    MonteCarloResult,
+    MonteCarloSimulator,
+    RandomBaselineAnalyzer,
+    RandomBaselineConfig,
+    RandomBaselineResult,
+    WalkForwardAnalyzer,
+    WalkForwardConfig,
+    WalkForwardResult,
+    WalkForwardWindow,
+)
+from xau_bot.backtest.engine import BacktestEngine
+from xau_bot.backtest.execution import SimulatedBroker
+from xau_bot.backtest.models import (
+    BacktestConfig,
+    BacktestOrder,
+    BacktestResult,
+    BacktestTrade,
+    EquityPoint,
+    OrderStatus,
+    OrderType,
+    TradeExitReason,
+)
+from xau_bot.backtest.slippage import (
+    FixedSlippage,
+    NormalSlippage,
+    SlippageModel,
+    ZeroSlippage,
+)
+
+__all__ = [
+    "BacktestAnalysisReport",
+    "BacktestAnalyzer",
+    "BacktestConfig",
+    "BacktestEngine",
+    "BacktestOrder",
+    "BacktestResult",
+    "BacktestTrade",
+    "EquityPoint",
+    "FixedSlippage",
+    "Gate1Evaluation",
+    "MonteCarloConfig",
+    "MonteCarloResult",
+    "MonteCarloSimulator",
+    "NormalSlippage",
+    "OrderStatus",
+    "OrderType",
+    "RandomBaselineAnalyzer",
+    "RandomBaselineConfig",
+    "RandomBaselineResult",
+    "SimulatedBroker",
+    "SlippageModel",
+    "TradeExitReason",
+    "WalkForwardAnalyzer",
+    "WalkForwardConfig",
+    "WalkForwardResult",
+    "WalkForwardWindow",
+    "ZeroSlippage",
+]
