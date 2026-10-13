@@ -442,6 +442,10 @@ def run_bot_cli(
             risk_config=PositionRiskConfig(
                 remove_tp_after_partial=settings.remove_tp_after_partial
             ),
+            require_premium_discount=settings.smc_require_premium_discount,
+            require_sweep_guard=settings.smc_require_sweep_guard,
+            sweep_guard_max_rejection_ratio=settings.smc_sweep_guard_max_rejection_ratio,
+            htf_alignment_required=settings.smc_htf_alignment_required,
         )
         engines.append(engine)
 

@@ -2788,3 +2788,134 @@ def test_parameter_registry_immutability(tmp_path: Path) -> None:
         assert versions[1].version_id == v1.version_id
         assert versions[0].parameters == {"max_spread_atr_ratio": 0.06}
         assert versions[1].parameters == {"max_spread_atr_ratio": 0.08}
+
+
+def test_hypothesis_validator_propagates_smc_settings_and_htf_candles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from xau_bot.domain.models import Candle, Timeframe
+    from xau_bot.learning.models import (
+        Hypothesis,
+        HypothesisStatus,
+        ValidationMetrics,
+        ValidationResult,
+    )
+    from xau_bot.learning.validator import HypothesisValidator
+
+    t0 = datetime(2026, 10, 8, 8, 0, tzinfo=UTC)
+    candles = [
+        Candle(
+            time=t0 + timedelta(minutes=5 * i),
+            open=2650.0,
+            high=2655.0,
+            low=2648.0,
+            close=2652.0,
+            volume=10.0,
+            timeframe=Timeframe.M5,
+        )
+        for i in range(25)
+    ]
+    ticks = [
+        Tick(time=t0, bid=2650.0, ask=2650.2),
+        Tick(time=t0 + timedelta(minutes=60), bid=2651.0, ask=2651.2),
+    ]
+
+    captured_calls: list[dict[str, Any]] = []
+
+    def mock_detect(*args: Any, **kwargs: Any) -> list[Any]:
+        captured_calls.append(kwargs)
+        return []
+
+    import xau_bot.smc.setup as smc_setup_mod
+
+    monkeypatch.setattr(smc_setup_mod, "detect_setups", mock_detect)
+    monkeypatch.setenv("XAU_SMC_REQUIRE_PREMIUM_DISCOUNT", "false")
+    monkeypatch.setenv("XAU_SMC_SWEEP_GUARD_MAX_REJECTION_RATIO", "0.32")
+
+    dummy_m = ValidationMetrics(
+        total_trades=0,
+        win_count=0,
+        loss_count=0,
+        win_rate=0.0,
+        expectancy_r=0.0,
+        max_drawdown_pct=0.0,
+        profit_factor=1.0,
+    )
+    validator = HypothesisValidator()
+    monkeypatch.setattr(
+        validator,
+        "validate_empirical",
+        lambda **kwargs: ValidationResult(
+            hypothesis_id="HYP-1",
+            parameter_name="max_spread_atr_ratio",
+            current_value="0.08",
+            proposed_value="0.06",
+            baseline_metrics=dummy_m,
+            candidate_metrics=dummy_m,
+            expectancy_delta_r=0.0,
+            drawdown_delta_pct=0.0,
+            trade_retention_rate=0.0,
+            is_statistically_superior=False,
+            p_value_improvement=1.0,
+            verdict=HypothesisStatus.REJECTED,
+            rejection_reason="Spy",
+            validated_at=datetime.now(UTC),
+        ),
+    )
+
+    # 1. Testa ramo max_spread_atr_ratio
+    hyp_spread = Hypothesis(
+        id="HYP-SPREAD",
+        created_at=t0,
+        parameter_name="max_spread_atr_ratio",
+        current_value="0.08",
+        proposed_value="0.06",
+        sample_size=30,
+        condition_loss_rate=0.40,
+        baseline_loss_rate=0.50,
+        p_value=0.01,
+        z_score=2.5,
+        observed_expectancy_r=1.0,
+        status=HypothesisStatus.PROPOSED,
+        description="Spread test",
+        rationale="Spread test",
+    )
+    validator.validate(hyp_spread, ticks=ticks, candles=candles, setups=None)
+    assert len(captured_calls) >= 1
+    call1 = captured_calls[-1]
+    assert call1.get("require_premium_discount") is False
+    assert call1.get("require_sweep_guard") is True
+    assert call1.get("sweep_guard_max_rejection_ratio") == 0.32
+    assert call1.get("htf_alignment_required") is True
+    assert call1.get("htf_candles") is not None
+    htf_series_1 = call1.get("htf_candles")
+    assert htf_series_1 is not None and htf_series_1[0].timeframe == Timeframe.H1
+
+    # 2. Testa ramo min_displacement_multiplier
+    captured_calls.clear()
+    hyp_disp = Hypothesis(
+        id="HYP-DISP",
+        created_at=t0,
+        parameter_name="min_displacement_multiplier",
+        current_value="1.2",
+        proposed_value="1.8",
+        sample_size=30,
+        condition_loss_rate=0.40,
+        baseline_loss_rate=0.50,
+        p_value=0.01,
+        z_score=2.5,
+        observed_expectancy_r=1.0,
+        status=HypothesisStatus.PROPOSED,
+        description="Disp test",
+        rationale="Disp test",
+    )
+    validator.validate(hyp_disp, ticks=ticks, candles=candles, setups=None)
+    assert len(captured_calls) == 2
+    for call in captured_calls:
+        assert call.get("require_premium_discount") is False
+        assert call.get("require_sweep_guard") is True
+        assert call.get("sweep_guard_max_rejection_ratio") == 0.32
+        assert call.get("htf_alignment_required") is True
+        assert call.get("htf_candles") is not None
+        htf_series_2 = call.get("htf_candles")
+        assert htf_series_2 is not None and htf_series_2[0].timeframe == Timeframe.H1

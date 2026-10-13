@@ -39,6 +39,7 @@ select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM"]
 
 [tool.mypy]
 python_version = "3.12"
+mypy_path = "src"
 strict = true
 warn_return_any = true
 warn_unused_configs = true

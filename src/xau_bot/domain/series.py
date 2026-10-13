@@ -119,3 +119,36 @@ class CandleSeries:
 
     def __iter__(self) -> Iterator[Candle]:
         return iter(self._candles)
+
+
+def resample_to_h1(candles: Sequence[Candle]) -> list[Candle]:
+    """Reamostra uma sequência cronológica de velas para timeframe H1."""
+    if not candles:
+        return []
+
+    buckets: dict[datetime, list[Candle]] = {}
+    for c in candles:
+        bucket_time = c.time.replace(minute=0, second=0, microsecond=0)
+        if bucket_time not in buckets:
+            buckets[bucket_time] = []
+        buckets[bucket_time].append(c)
+
+    resampled: list[Candle] = []
+    for b_time, b_candles in sorted(buckets.items(), key=lambda kv: kv[0]):
+        c_open = b_candles[0].open
+        c_high = max(c.high for c in b_candles)
+        c_low = min(c.low for c in b_candles)
+        c_close = b_candles[-1].close
+        c_volume = sum(c.volume for c in b_candles)
+        resampled.append(
+            Candle(
+                time=b_time,
+                open=c_open,
+                high=c_high,
+                low=c_low,
+                close=c_close,
+                volume=c_volume,
+                timeframe=Timeframe.H1,
+            )
+        )
+    return resampled

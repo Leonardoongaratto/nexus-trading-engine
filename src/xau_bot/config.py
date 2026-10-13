@@ -1,4 +1,5 @@
 import sys
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from pydantic import Field, SecretStr, field_validator
@@ -21,6 +22,10 @@ class Settings(BaseSettings):
     max_consecutive_losses: int = Field(default=3, ge=1, le=10)
     max_daily_trades: int = Field(default=5, ge=1, le=20)
     remove_tp_after_partial: bool = True
+    smc_require_premium_discount: bool = True
+    smc_require_sweep_guard: bool = True
+    smc_sweep_guard_max_rejection_ratio: float = Field(default=0.40, ge=0.10, le=0.90)
+    smc_htf_alignment_required: bool = True
     telegram_token: SecretStr | None = None
     telegram_chat_id: SecretStr | None = None
     mt5_login: SecretStr | None = None
@@ -71,6 +76,14 @@ class Settings(BaseSettings):
     def get_trigger_timeframes(self) -> tuple[str, ...]:
         parts = [p.strip().upper() for p in self.timeframe_entry.split(",") if p.strip()]
         return tuple(parts) if parts else ("M5",)
+
+    def smc_kwargs(self) -> dict[str, Any]:
+        return {
+            "require_premium_discount": self.smc_require_premium_discount,
+            "require_sweep_guard": self.smc_require_sweep_guard,
+            "sweep_guard_max_rejection_ratio": self.smc_sweep_guard_max_rejection_ratio,
+            "htf_alignment_required": self.smc_htf_alignment_required,
+        }
 
     model_config = SettingsConfigDict(
         env_prefix="XAU_",

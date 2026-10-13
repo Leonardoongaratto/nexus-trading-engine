@@ -171,6 +171,10 @@ class LiveTradingEngine:
         shadow_engine: ShadowEngine | None = None,
         shadow_params: dict[str, Any] | None = None,
         active_params: dict[str, Any] | None = None,
+        require_premium_discount: bool = True,
+        require_sweep_guard: bool = True,
+        sweep_guard_max_rejection_ratio: float = 0.40,
+        htf_alignment_required: bool = True,
     ) -> None:
         self.broker = broker
         self.proposal_manager = proposal_manager
@@ -196,6 +200,10 @@ class LiveTradingEngine:
         self.is_trading_halted_fn = is_trading_halted_fn
         self.telegram_service: LiveTelegramNotifier | None = telegram_service
         self.magic = magic
+        self.require_premium_discount = require_premium_discount
+        self.require_sweep_guard = require_sweep_guard
+        self.sweep_guard_max_rejection_ratio = sweep_guard_max_rejection_ratio
+        self.htf_alignment_required = htf_alignment_required
         self.shadow_engine = shadow_engine
         self.shadow_params = shadow_params or {}
         self.active_params = active_params or {}
@@ -345,7 +353,9 @@ class LiveTradingEngine:
             if not htf_candles:
                 htf_candles = self.candle_loop.get_closed_series(Timeframe.H4)
         else:
-            htf_candles = self.candle_loop.get_closed_series(Timeframe.H4)
+            htf_candles = self.candle_loop.get_closed_series(Timeframe.H1)
+            if not htf_candles:
+                htf_candles = self.candle_loop.get_closed_series(Timeframe.H4)
             if not htf_candles:
                 htf_candles = self.candle_loop.get_closed_series(Timeframe.D1)
 
@@ -392,6 +402,10 @@ class LiveTradingEngine:
             candles=entry_candles,
             htf_candles=htf_candles if htf_candles else None,
             as_of_time=event.closed_at,
+            require_premium_discount=self.require_premium_discount,
+            require_sweep_guard=self.require_sweep_guard,
+            sweep_guard_max_rejection_ratio=self.sweep_guard_max_rejection_ratio,
+            htf_alignment_required=self.htf_alignment_required,
         )
         active_setups = get_active_setups(detected, as_of_time=event.closed_at)
         logger.info(

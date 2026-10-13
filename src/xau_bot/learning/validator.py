@@ -226,9 +226,17 @@ class HypothesisValidator:
                 spread_filter=SpreadFilter(SpreadFilterConfig(max_spread_atr_ratio=cand_ratio))
             )
             if active_setups is None and candles:
+                from xau_bot.config import Settings
+                from xau_bot.domain.series import resample_to_h1
                 from xau_bot.smc.setup import detect_setups
 
-                active_setups = detect_setups(candles=candles)
+                settings = Settings()
+                htf_candles = resample_to_h1(candles)
+                active_setups = detect_setups(
+                    candles=candles,
+                    htf_candles=htf_candles if htf_candles else None,
+                    **settings.smc_kwargs(),
+                )
                 candidate_setups = active_setups
         elif hypothesis.parameter_name == "min_displacement_multiplier":
             try:
@@ -251,13 +259,23 @@ class HypothesisValidator:
                 )
 
             if setups is None and candles:
+                from xau_bot.config import Settings
+                from xau_bot.domain.series import resample_to_h1
                 from xau_bot.smc.setup import detect_setups
 
+                settings = Settings()
+                htf_candles = resample_to_h1(candles)
                 active_setups = detect_setups(
-                    candles=candles, min_ob_displacement_atr=base_min_disp
+                    candles=candles,
+                    htf_candles=htf_candles if htf_candles else None,
+                    min_ob_displacement_atr=base_min_disp,
+                    **settings.smc_kwargs(),
                 )
                 candidate_setups = detect_setups(
-                    candles=candles, min_ob_displacement_atr=cand_min_disp
+                    candles=candles,
+                    htf_candles=htf_candles if htf_candles else None,
+                    min_ob_displacement_atr=cand_min_disp,
+                    **settings.smc_kwargs(),
                 )
             elif active_setups is not None:
                 has_measurable = any(

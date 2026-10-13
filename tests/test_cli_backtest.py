@@ -4,6 +4,7 @@ import re
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -408,10 +409,16 @@ def test_cli_run_with_detect_setups(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         confirmed_time=start_dt + timedelta(seconds=1),
         risk_reward_ratio=2.0,
     )
-    monkeypatch.setattr(
-        "xau_bot.cli.backtest.detect_setups",
-        lambda candles: [detected_setup],
-    )
+    captured_detect_kwargs: dict[str, Any] = {}
+
+    def mock_detect(candles: Any, *args: Any, **kwargs: Any) -> list[TradeSetup]:
+        captured_detect_kwargs.update(kwargs)
+        return [detected_setup]
+
+    monkeypatch.setattr("xau_bot.cli.backtest.detect_setups", mock_detect)
+    monkeypatch.setenv("XAU_SMC_REQUIRE_PREMIUM_DISCOUNT", "false")
+    monkeypatch.setenv("XAU_SMC_SWEEP_GUARD_MAX_REJECTION_RATIO", "0.35")
+
     stdout = io.StringIO()
     stderr = io.StringIO()
 
@@ -434,6 +441,13 @@ def test_cli_run_with_detect_setups(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert code == 0
     out = stdout.getvalue()
     assert "Total de Trades:   1" in out
+
+    # Valida regressão: flags de Settings e htf_candles foram propagados a detect_setups
+    assert captured_detect_kwargs.get("require_premium_discount") is False
+    assert captured_detect_kwargs.get("require_sweep_guard") is True
+    assert captured_detect_kwargs.get("sweep_guard_max_rejection_ratio") == 0.35
+    assert captured_detect_kwargs.get("htf_alignment_required") is True
+    assert captured_detect_kwargs.get("htf_candles") is not None
 
 
 def test_cli_run_with_filters(tmp_path: Path) -> None:

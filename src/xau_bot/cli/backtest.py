@@ -24,8 +24,8 @@ from xau_bot.domain.loader import (
     load_setups_from_json,
     load_ticks_from_file,
 )
+from xau_bot.domain.models import Candle, TradeSetup
 from xau_bot.domain.models import Tick as DomainTick
-from xau_bot.domain.models import TradeSetup
 from xau_bot.filters.composite import CompositeTradeFilter
 from xau_bot.filters.models import SpreadFilterConfig
 from xau_bot.filters.news import NewsFilter, load_calendar_from_file
@@ -67,6 +67,12 @@ def build_backtest_parser(
         type=str,
         default=None,
         help="Caminho para arquivo de candles históricos (CSV ou JSON).",
+    )
+    parser.add_argument(
+        "--candles-htf-path",
+        type=str,
+        default=None,
+        help="Caminho para arquivo de candles históricos de timeframe superior (HTF, ex.: H1).",
     )
     parser.add_argument(
         "--detect-setups",
@@ -390,7 +396,26 @@ def run_backtest_cli(
     setups: list[TradeSetup] | None = None
     if args.detect_setups and candles is not None:
         try:
-            setups = detect_setups(candles.closed_candles)
+            from xau_bot.config import Settings
+            from xau_bot.domain.series import resample_to_h1
+
+            settings = Settings()
+            htf_candles: list[Candle] | None = None
+            if getattr(args, "candles_htf_path", None):
+                htf_path = Path(args.candles_htf_path)
+                if not htf_path.is_file():
+                    stderr.write(f"Erro: arquivo de candles HTF não encontrado: {htf_path}\n")
+                    return 2
+                htf_series = load_candles_from_file(htf_path)
+                htf_candles = list(htf_series.closed_candles)
+            elif candles.closed_candles:
+                htf_candles = resample_to_h1(candles.closed_candles)
+
+            setups = detect_setups(
+                candles.closed_candles,
+                htf_candles=htf_candles if htf_candles else None,
+                **settings.smc_kwargs(),
+            )
         except Exception as err:
             stderr.write(f"Erro na detecção de setups: {err}\n")
             return 2

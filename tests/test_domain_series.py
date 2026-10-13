@@ -148,3 +148,47 @@ def test_series_gap_detection_during_market_hours_detected() -> None:
     market_gaps = series.detect_gaps(is_market_open=sf.is_market_open)
     assert len(market_gaps) == 1
     assert market_gaps[0].missing_bars == 3
+
+
+def test_resample_to_h1() -> None:
+    from xau_bot.domain.series import resample_to_h1
+
+    assert resample_to_h1([]) == []
+
+    t0 = datetime(2026, 9, 23, 14, 0, tzinfo=UTC)
+    m5_candles = [
+        Candle(
+            time=t0 + timedelta(minutes=5 * i),
+            open=2650.0 + i,
+            high=2655.0 + i,
+            low=2645.0 + i,
+            close=2652.0 + i,
+            volume=10.0,
+            timeframe=Timeframe.M5,
+        )
+        for i in range(12)
+    ]
+    m5_candles.append(
+        Candle(
+            time=t0 + timedelta(minutes=60),
+            open=2670.0,
+            high=2675.0,
+            low=2668.0,
+            close=2672.0,
+            volume=20.0,
+            timeframe=Timeframe.M5,
+        )
+    )
+
+    h1_candles = resample_to_h1(m5_candles)
+    assert len(h1_candles) == 2
+    assert h1_candles[0].time == t0
+    assert h1_candles[0].timeframe == Timeframe.H1
+    assert h1_candles[0].open == 2650.0
+    assert h1_candles[0].high == 2666.0
+    assert h1_candles[0].low == 2645.0
+    assert h1_candles[0].close == 2663.0
+    assert h1_candles[0].volume == 120.0
+    assert h1_candles[1].time == t0 + timedelta(minutes=60)
+    assert h1_candles[1].open == 2670.0
+    assert h1_candles[1].close == 2672.0

@@ -137,6 +137,9 @@ def detect_setups(
     buffer_pips: float = 0.5,
     validity_bars: int = 20,
     as_of_time: datetime | None = None,
+    require_premium_discount: bool = False,
+    require_sweep_guard: bool = False,
+    sweep_guard_max_rejection_ratio: float = 0.40,
 ) -> list[TradeSetup]:
     """Detect SMC entry setups across confirmed structural events.
 
@@ -261,6 +264,25 @@ def detect_setups(
             continue
 
         sweep = qualifying_sweeps[-1] if qualifying_sweeps else None
+        sweep_guard_passed = False
+
+        if require_sweep_guard and sweep is not None:
+            sw_c = sweep.candle
+            sw_range = sw_c.high - sw_c.low
+            if sw_range > 0:
+                lower_wick = min(sw_c.open, sw_c.close) - sw_c.low
+                upper_wick = sw_c.high - max(sw_c.open, sw_c.close)
+                if (
+                    direction == Direction.BEARISH
+                    and (lower_wick / sw_range) >= sweep_guard_max_rejection_ratio
+                ):
+                    continue
+                if (
+                    direction == Direction.BULLISH
+                    and (upper_wick / sw_range) >= sweep_guard_max_rejection_ratio
+                ):
+                    continue
+                sweep_guard_passed = True
 
         cand_fvgs: list[FVG] = []
         expected_fvg_type = FVGType.BULLISH if direction == Direction.BULLISH else FVGType.BEARISH
@@ -392,6 +414,12 @@ def detect_setups(
         if entry_price <= 0:
             continue
 
+        if require_premium_discount and setup_dealing_range is not None:
+            if direction == Direction.BULLISH and setup_dealing_range.is_premium(entry_price):
+                continue
+            if direction == Direction.BEARISH and setup_dealing_range.is_discount(entry_price):
+                continue
+
         confirmed_time = max(
             event.confirmed_time,
             selected_poi.confirmed_time if selected_poi else event.confirmed_time,
@@ -501,6 +529,13 @@ def detect_setups(
                 confluences_list.append("HTF_ALIGNED")
             else:
                 confluences_list.append("HTF_COUNTER")
+        if setup_dealing_range is not None:
+            if direction == Direction.BULLISH and setup_dealing_range.is_discount(entry_price):
+                confluences_list.append("DISCOUNT_ALIGNED")
+            elif direction == Direction.BEARISH and setup_dealing_range.is_premium(entry_price):
+                confluences_list.append("PREMIUM_ALIGNED")
+        if sweep_guard_passed:
+            confluences_list.append("SWEEP_GUARD_CONFIRMED")
 
         setup_id = (
             f"setup_{direction.value.lower()}_"

@@ -39,6 +39,7 @@ from xau_bot.domain.series import (
     DuplicateCandleError,
     TimeframeMismatchError,
     UnsortedSeriesError,
+    resample_to_h1,
 )
 
 __all__ = [
@@ -78,4 +79,5 @@ __all__ = [
     "load_ticks_from_file",
     "load_ticks_from_json",
     "parse_datetime",
+    "resample_to_h1",
 ]
