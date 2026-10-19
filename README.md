@@ -1,8 +1,7 @@
 # Nexus Trading Engine
 
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
-[![Test Coverage](https://img.shields.io/badge/coverage-94.9%25-brightgreen.svg)](https://github.com/)
-[![Tests](https://img.shields.io/badge/tests-1080%2B%20passing-success.svg)](https://github.com/)
+[![CI](https://github.com/Leonardoongaratto/nexus-trading-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Leonardoongaratto/nexus-trading-engine/actions/workflows/ci.yml)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checker: Mypy](https://img.shields.io/badge/type%20checker-mypy%20strict-blue.svg)](https://mypy-lang.org/)
 [![Platform](https://img.shields.io/badge/broker-MetaTrader%205-orange.svg)](https://www.metatrader5.com/)
@@ -94,7 +93,7 @@ Built with a hexagonal architecture and pure-function domain models, Nexus combi
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/nexus-trading-engine.git
+git clone https://github.com/Leonardoongaratto/nexus-trading-engine.git
 cd nexus-trading-engine
 
 # Create and activate virtual environment
@@ -168,8 +167,8 @@ mypy src tests
 pytest --cov=src --cov-fail-under=80
 ```
 
-- **Current Suite:** 1,080+ tests passing.
-- **Coverage:** **94.9%** across all modules.
+- **Current Suite:** 1,090+ tests, run on every push by the CI workflow.
+- **Coverage:** ~95% across all modules, enforced at a minimum of 80%.
 
 ---
 
@@ -181,4 +180,6 @@ Trading foreign exchange, precious metals, indices, and cryptocurrencies carries
 
 ## 📄 License
 
-MIT License. See [LICENSE](LICENSE) for details.
+Copyright © 2026 Leonardo Custodio Ongaratto. All rights reserved.
+
+The source code is published for portfolio and study purposes. No license is granted to copy, modify or use it in trading without written permission.
