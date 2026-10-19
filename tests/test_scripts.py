@@ -28,6 +28,12 @@ def get_available_powershell_runtimes() -> list[str]:
 AVAILABLE_POWERSHELL_RUNTIMES = get_available_powershell_runtimes()
 
 
+def has_dry_run_nssm_call(stdout: str, args: str) -> bool:
+    """When NSSM is installed the script prints its full path instead of bare nssm.exe."""
+    pattern = rf"\[DRY-RUN\] (?:\S*[\\/])?nssm\.exe {re.escape(args)}"
+    return re.search(pattern, stdout, flags=re.IGNORECASE) is not None
+
+
 @pytest.fixture
 def scripts_dir() -> Path:
     return Path(__file__).parent.parent / "scripts"
@@ -174,13 +180,13 @@ def test_service_nssm_dry_run_install(scripts_dir: Path, powershell_exe: str) ->
     stdout = proc.stdout
 
     # Verify that install command targets CLI run entrypoint
-    assert "[DRY-RUN] nssm.exe install XauBot" in stdout
+    assert has_dry_run_nssm_call(stdout, "install XauBot")
     assert "-m xau_bot.cli run --broker mt5 --port 8055 --log-json" in stdout
-    assert "[DRY-RUN] nssm.exe set XauBot AppDirectory" in stdout
-    assert "[DRY-RUN] nssm.exe set XauBot AppStdout" in stdout
-    assert "[DRY-RUN] nssm.exe set XauBot AppStderr" in stdout
-    assert "[DRY-RUN] nssm.exe set XauBot AppRotateFiles 1" in stdout
-    assert "[DRY-RUN] nssm.exe set XauBot AppRestartDelay 5000" in stdout
+    assert has_dry_run_nssm_call(stdout, "set XauBot AppDirectory")
+    assert has_dry_run_nssm_call(stdout, "set XauBot AppStdout")
+    assert has_dry_run_nssm_call(stdout, "set XauBot AppStderr")
+    assert has_dry_run_nssm_call(stdout, "set XauBot AppRotateFiles 1")
+    assert has_dry_run_nssm_call(stdout, "set XauBot AppRestartDelay 5000")
 
 
 def test_service_nssm_cli_arguments_parser_compatibility(
@@ -242,7 +248,7 @@ def test_service_nssm_dry_run_actions(scripts_dir: Path, powershell_exe: str) ->
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
         assert proc.returncode == 0
-        assert f"[DRY-RUN] nssm.exe {action.lower()} TestBot" in proc.stdout
+        assert has_dry_run_nssm_call(proc.stdout, f"{action.lower()} TestBot")
 
 
 def test_service_nssm_status_with_invalid_nssm_path(scripts_dir: Path, powershell_exe: str) -> None:
