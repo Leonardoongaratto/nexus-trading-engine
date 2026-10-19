@@ -468,15 +468,10 @@ class LiveTradingEngine:
                 continue
             self.seen_setup_ids.add(setup.id)
 
+            order_type_str = "BUY_LIMIT" if setup.direction == Direction.BULLISH else "SELL_LIMIT"
+            execution_price = setup.entry_price
+
             if setup.direction == Direction.BULLISH:
-                if setup.entry_price > symbol_info.ask + 1e-4:
-                    logger.info(
-                        "LiveTradingEngine: Setup compra %s descartado (entrada %.2f > ask %.2f)",
-                        setup.id,
-                        setup.entry_price,
-                        symbol_info.ask,
-                    )
-                    continue
                 if setup.take_profit is not None:
                     total_move = setup.take_profit - setup.entry_price
                     dist_to_tp = setup.take_profit - symbol_info.bid
@@ -507,15 +502,22 @@ class LiveTradingEngine:
                         setup.stop_loss,
                     )
                     continue
-            elif setup.direction == Direction.BEARISH:
-                if setup.entry_price < symbol_info.bid - 1e-4:
+
+                if setup.entry_price > symbol_info.ask + 1e-4:
+                    order_type_str = "BUY"
+                    execution_price = symbol_info.ask
                     logger.info(
-                        "LiveTradingEngine: Setup venda %s descartado (entrada %.2f < bid %.2f)",
+                        "LiveTradingEngine: Setup compra %s em desconto favorável "
+                        "(ask %.2f <= entrada %.2f); executando a mercado BUY",
                         setup.id,
+                        symbol_info.ask,
                         setup.entry_price,
-                        symbol_info.bid,
                     )
-                    continue
+                else:
+                    order_type_str = "BUY_LIMIT"
+                    execution_price = setup.entry_price
+
+            elif setup.direction == Direction.BEARISH:
                 if setup.take_profit is not None:
                     total_move = setup.entry_price - setup.take_profit
                     dist_to_tp = symbol_info.ask - setup.take_profit
@@ -547,19 +549,37 @@ class LiveTradingEngine:
                     )
                     continue
 
+                if setup.entry_price < symbol_info.bid - 1e-4:
+                    order_type_str = "SELL"
+                    execution_price = symbol_info.bid
+                    logger.info(
+                        "LiveTradingEngine: Setup venda %s em prêmio favorável "
+                        "(bid %.2f >= entrada %.2f); executando a mercado SELL",
+                        setup.id,
+                        symbol_info.bid,
+                        setup.entry_price,
+                    )
+                else:
+                    order_type_str = "SELL_LIMIT"
+                    execution_price = setup.entry_price
+
             account_info = await self.broker.get_account_info()
             account_state = account_info_to_state(account_info)
             risk_spec = symbol_info_to_risk_spec(symbol_info)
             cfg = self.risk_config
 
+            spread_val = symbol_info.spread_points * symbol_info.point_size
             lot_calc = calculate_lot_size(
                 account=account_state,
                 spec=risk_spec,
                 config=cfg,
                 direction=setup.direction,
-                entry_price=setup.entry_price,
+                entry_price=execution_price,
                 stop_loss=setup.stop_loss,
-                spread=symbol_info.spread_points * symbol_info.point_size,
+                spread=spread_val,
+                adjust_sl_for_spread=True,
+                buffer_points=max(symbol_info.spread_points * 0.5, 2.0),
+                min_sl_spread_multiplier=2.0,
             )
 
             if not lot_calc.success:
@@ -571,25 +591,32 @@ class LiveTradingEngine:
                 )
                 continue
 
-            order_type_str = "BUY_LIMIT" if setup.direction == Direction.BULLISH else "SELL_LIMIT"
             valid_until = setup.valid_until or (
                 event.closed_at + timedelta(seconds=self.proposal_manager.default_timeout_s)
             )
 
-            magic_number = self.magic + (1 if trigger_tf == Timeframe.M1 else 5)
+            magic_offset = (
+                1 if trigger_tf == Timeframe.M1 else (5 if trigger_tf == Timeframe.M5 else 15)
+            )
+            magic_number = self.magic + magic_offset
             order_comment = f"SMC-{trigger_tf.value}-{setup.id[:6]}"
+            final_sl = (
+                lot_calc.effective_sl if lot_calc.effective_sl is not None else setup.stop_loss
+            )
 
+            dev_val = 20 if order_type_str in ("BUY", "SELL") else None
             intent = OrderIntent(
                 symbol=self.symbol,
                 direction=setup.direction,
                 order_type=order_type_str,
                 volume=lot_calc.lot,
-                price=setup.entry_price,
-                stop_loss=setup.stop_loss,
+                price=execution_price,
+                stop_loss=final_sl,
                 take_profit=setup.take_profit,
                 magic=magic_number,
                 comment=order_comment,
-                expiration=valid_until,
+                expiration=valid_until if order_type_str in ("BUY_LIMIT", "SELL_LIMIT") else None,
+                deviation=dev_val,
             )
 
             risk_pct_val = (

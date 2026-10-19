@@ -131,6 +131,8 @@ class OutcomeData:
     duration_seconds: float = 0.0
     exit_reason: str = ""
     post_exit_behavior: str = ""
+    effective_rr: float | None = None
+    theoretical_rr: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -149,6 +151,8 @@ class OutcomeData:
             "duration_seconds": self.duration_seconds,
             "exit_reason": self.exit_reason,
             "post_exit_behavior": self.post_exit_behavior,
+            "effective_rr": self.effective_rr,
+            "theoretical_rr": self.theoretical_rr,
         }
 
     @classmethod
@@ -169,6 +173,12 @@ class OutcomeData:
             duration_seconds=float(data.get("duration_seconds", 0.0)),
             exit_reason=str(data.get("exit_reason", "")),
             post_exit_behavior=str(data.get("post_exit_behavior", "")),
+            effective_rr=(
+                float(data["effective_rr"]) if data.get("effective_rr") is not None else None
+            ),
+            theoretical_rr=(
+                float(data["theoretical_rr"]) if data.get("theoretical_rr") is not None else None
+            ),
         )
 
 

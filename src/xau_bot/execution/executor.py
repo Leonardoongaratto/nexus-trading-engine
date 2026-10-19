@@ -138,6 +138,11 @@ class OrderExecutor:
 
             order_type = OrderType(intent.order_type)
             current_price = intent.price
+            dev = (
+                intent.deviation
+                if intent.deviation is not None
+                else int(self._config.max_slippage_points)
+            )
             req = OrderRequest(
                 symbol=intent.symbol,
                 order_type=order_type,
@@ -147,6 +152,7 @@ class OrderExecutor:
                 take_profit=intent.take_profit,
                 comment=comment,
                 magic=magic,
+                deviation=dev,
             )
 
             attempts = 0

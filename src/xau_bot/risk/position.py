@@ -40,11 +40,19 @@ def calculate_lot_size(
     stop_loss: float,
     spread: float | None = None,
     adjust_sl_for_spread: bool = True,
+    buffer_points: float = 0.0,
+    min_sl_spread_multiplier: float = 0.0,
 ) -> LotCalculationResult:
     if not math.isfinite(entry_price) or entry_price <= 0:
         raise ValueError(f"entry_price must be positive and finite, got {entry_price}")
     if not math.isfinite(stop_loss) or stop_loss <= 0:
         raise ValueError(f"stop_loss must be positive and finite, got {stop_loss}")
+    if not math.isfinite(buffer_points) or buffer_points < 0:
+        raise ValueError(f"buffer_points cannot be negative, got {buffer_points}")
+    if not math.isfinite(min_sl_spread_multiplier) or min_sl_spread_multiplier < 0:
+        raise ValueError(
+            f"min_sl_spread_multiplier cannot be negative, got {min_sl_spread_multiplier}"
+        )
 
     if spread is None:
         spread = spec.spread_points * spec.point
@@ -66,8 +74,22 @@ def calculate_lot_size(
                 reject_reason=RiskRejectReason.INVALID_PRICES,
                 details="Bullish trade requires stop_loss < entry_price",
             )
-        effective_sl = stop_loss
+        if adjust_sl_for_spread and buffer_points > 0:
+            effective_sl = adjust_stop_loss_for_spread(
+                direction=direction,
+                base_sl=stop_loss,
+                spread=spread,
+                point=spec.point,
+                buffer_points=buffer_points,
+            )
+        else:
+            effective_sl = stop_loss
         price_distance = entry_price - effective_sl
+        if min_sl_spread_multiplier > 0:
+            min_dist = max(spread * min_sl_spread_multiplier, spec.point)
+            if price_distance < min_dist:
+                price_distance = min_dist
+                effective_sl = entry_price - min_dist
     elif direction == Direction.BEARISH:
         if stop_loss <= entry_price:
             return LotCalculationResult(
@@ -89,11 +111,16 @@ def calculate_lot_size(
                 base_sl=stop_loss,
                 spread=spread,
                 point=spec.point,
-                buffer_points=0.0,
+                buffer_points=buffer_points,
             )
         else:
             effective_sl = stop_loss
         price_distance = effective_sl - entry_price
+        if min_sl_spread_multiplier > 0:
+            min_dist = max(spread * min_sl_spread_multiplier, spec.point)
+            if price_distance < min_dist:
+                price_distance = min_dist
+                effective_sl = entry_price + min_dist
     else:
         raise ValueError(f"Invalid direction: {direction!r}")
 
@@ -186,4 +213,5 @@ def calculate_lot_size(
         slippage_cost_usd=actual_slippage_cost,
         reject_reason=None,
         details="Calculated successfully",
+        effective_sl=effective_sl,
     )

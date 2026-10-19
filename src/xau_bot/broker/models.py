@@ -60,6 +60,7 @@ class OrderRequest:
     take_profit: float | None = None
     comment: str = ""
     magic: int = 0
+    deviation: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

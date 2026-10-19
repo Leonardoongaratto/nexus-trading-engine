@@ -1067,3 +1067,40 @@ async def test_modify_position_handles_10025_no_changes_when_already_applied() -
 
     assert res.success is True
     assert res.status == ExecutionStatus.RECONCILED
+
+
+@pytest.mark.asyncio
+async def test_execute_intent_propagates_deviation_to_order_request() -> None:
+    broker = AsyncMock()
+    broker.send_order.return_value = AsyncMock(
+        success=True, retcode=RETCODE_DONE, ticket=999, price=2650.0, volume=0.1
+    )
+
+    cfg = ExecutionConfig(max_slippage_points=10.0)
+    executor = OrderExecutor(broker, config=cfg)
+
+    # 1. Intent with explicit deviation
+    intent_with_dev = _make_intent(order_type="BUY")
+    intent_with_dev = OrderIntent(
+        symbol=intent_with_dev.symbol,
+        direction=intent_with_dev.direction,
+        order_type=intent_with_dev.order_type,
+        volume=intent_with_dev.volume,
+        price=intent_with_dev.price,
+        stop_loss=intent_with_dev.stop_loss,
+        take_profit=intent_with_dev.take_profit,
+        magic=intent_with_dev.magic,
+        comment="test-dev-1",
+        deviation=25,
+    )
+    res1 = await executor.execute_intent(intent_with_dev)
+    assert res1.success is True
+    req1 = broker.send_order.call_args[0][0]
+    assert req1.deviation == 25
+
+    # 2. Intent without explicit deviation falls back to config.max_slippage_points
+    intent_no_dev = _make_intent(order_type="SELL", comment="test-dev-2")
+    res2 = await executor.execute_intent(intent_no_dev)
+    assert res2.success is True
+    req2 = broker.send_order.call_args[0][0]
+    assert req2.deviation == 10

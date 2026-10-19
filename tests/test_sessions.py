@@ -345,3 +345,48 @@ def test_session_filter_24_7_mode() -> None:
     can_trade_dz, reason_dz = sf_247.can_trade(dead_zone_time)
     assert can_trade_dz is True
     assert reason_dz is None
+
+
+def test_session_filter_extended_ny_mode() -> None:
+    sf_standard = SessionFilter(extended_ny=False)
+    sf_ext = SessionFilter(extended_ny=True)
+
+    afternoon_time = datetime(2026, 9, 24, 14, 30, tzinfo=ZoneInfo("America/New_York"))
+
+    in_kz_std, name_std = sf_standard.is_in_kill_zone(afternoon_time)
+    assert in_kz_std is False
+    assert name_std is None
+
+    can_trade_std, reason_std = sf_standard.can_trade(afternoon_time)
+    assert can_trade_std is False
+    assert reason_std == TradeBlockReason.OUTSIDE_KILL_ZONE
+
+    in_kz_ext, name_ext = sf_ext.is_in_kill_zone(afternoon_time)
+    assert in_kz_ext is True
+    assert name_ext == SessionName.NEW_YORK_AFTERNOON
+
+    can_trade_ext, reason_ext = sf_ext.can_trade(afternoon_time)
+    assert can_trade_ext is True
+    assert reason_ext is None
+
+
+def test_session_filter_rollover_blackout() -> None:
+    sf_ext = SessionFilter(extended_ny=True, rollover_blackout=True)
+
+    # 16:45 NY - still allowed
+    pre_blackout_time = datetime(2026, 9, 24, 16, 45, tzinfo=ZoneInfo("America/New_York"))
+    can_trade_pre, reason_pre = sf_ext.can_trade(pre_blackout_time)
+    assert can_trade_pre is True
+    assert reason_pre is None
+
+    # 16:55 NY - in rollover blackout (16:50 to 17:00)
+    blackout_time = datetime(2026, 9, 24, 16, 55, tzinfo=ZoneInfo("America/New_York"))
+    can_trade_bo, reason_bo = sf_ext.can_trade(blackout_time)
+    assert can_trade_bo is False
+    assert reason_bo == TradeBlockReason.ROLLOVER_BLACKOUT
+
+    # If rollover_blackout is disabled, 16:55 is allowed under extended_ny
+    sf_no_bo = SessionFilter(extended_ny=True, rollover_blackout=False)
+    can_trade_no_bo, reason_no_bo = sf_no_bo.can_trade(blackout_time)
+    assert can_trade_no_bo is True
+    assert reason_no_bo is None

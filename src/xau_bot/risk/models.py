@@ -210,6 +210,7 @@ class LotCalculationResult:
     slippage_cost_usd: float = 0.0
     reject_reason: RiskRejectReason | None = None
     details: str = ""
+    effective_sl: float | None = None
 
     def __post_init__(self) -> None:
         for name, val in (
@@ -224,6 +225,8 @@ class LotCalculationResult:
         ):
             if not math.isfinite(val):
                 raise ValueError(f"{name} must be finite, got {val}")
+        if self.effective_sl is not None and not math.isfinite(self.effective_sl):
+            raise ValueError(f"effective_sl must be finite, got {self.effective_sl}")
 
 
 @dataclass(frozen=True, slots=True)

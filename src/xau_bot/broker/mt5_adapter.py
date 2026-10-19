@@ -536,6 +536,8 @@ class Mt5BrokerAdapter(BrokerPort):
                 mt5_req["comment"] = request.comment
             if request.magic:
                 mt5_req["magic"] = request.magic
+            if request.deviation is not None:
+                mt5_req["deviation"] = int(request.deviation)
 
             def _check_and_send_sync() -> tuple[str, Any, tuple[int, str]]:
                 check = client.order_check(mt5_req)

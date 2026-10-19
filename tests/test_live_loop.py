@@ -2023,3 +2023,137 @@ async def test_runner_unlimited_tp_after_partial_close(
 
     assert tg_service.send_trade_closed.called
     assert 7701 not in engine.partially_closed_tickets
+
+
+@pytest.mark.asyncio
+async def test_ac_live_bullish_market_order_when_price_below_entry(
+    base_components: dict[str, Any],
+) -> None:
+    engine: LiveTradingEngine = base_components["engine"]
+    proposal_manager: ProposalManager = base_components["proposal_manager"]
+    broker = base_components["broker"]
+    now = datetime(2026, 10, 5, 12, 0, 0, tzinfo=UTC)
+
+    candles = [_create_candle(time=now + timedelta(minutes=5 * i)) for i in range(25)]
+    engine.candle_loop.feed_candles(Timeframe.M5, candles, has_forming_candle=False)
+
+    fake_setup = TradeSetup(
+        id="setup_bull_discount",
+        direction=Direction.BULLISH,
+        entry_price=2650.0,
+        stop_loss=2640.0,
+        take_profit=2670.0,
+        time=now,
+        confirmed_time=now + timedelta(minutes=5),
+        risk_reward_ratio=2.0,
+        status=SetupStatus.PENDING,
+        timeframe=Timeframe.M5,
+    )
+
+    # Current market ask is 2648.0 (cheaper than entry 2650.0, deep discount)
+    broker.symbol_info = SymbolInfo(
+        name="XAUUSD",
+        bid=2647.70,
+        ask=2648.00,
+        point_size=0.01,
+        spread_points=30.0,
+        contract_size=100.0,
+        min_volume=0.01,
+        max_volume=100.0,
+        volume_step=0.01,
+        stops_level_points=1.0,
+        freeze_level_points=0.5,
+        tick_size=0.01,
+        tick_value=1.0,
+    )
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "xau_bot.runtime.live_loop.detect_setups",
+            lambda **kwargs: [fake_setup],
+        )
+
+        event = CandleCloseEvent(
+            timeframe=Timeframe.M5,
+            candle=candles[-1],
+            closed_series=tuple(candles),
+            forming_candle=None,
+            closed_at=candles[-1].time + timedelta(minutes=5),
+        )
+        await engine.on_candle_close(event)
+
+    props = proposal_manager.get_proposals()
+    assert len(props) == 1
+    p = props[0]
+    assert p.setup_id == "setup_bull_discount"
+    assert p.intent is not None
+    assert p.intent.order_type == "BUY"
+    assert p.intent.price == 2648.00
+
+
+@pytest.mark.asyncio
+async def test_ac_live_bearish_market_order_when_price_above_entry(
+    base_components: dict[str, Any],
+) -> None:
+    engine: LiveTradingEngine = base_components["engine"]
+    proposal_manager: ProposalManager = base_components["proposal_manager"]
+    broker = base_components["broker"]
+    now = datetime(2026, 10, 5, 12, 0, 0, tzinfo=UTC)
+
+    candles = [_create_candle(time=now + timedelta(minutes=5 * i)) for i in range(25)]
+    engine.candle_loop.feed_candles(Timeframe.M5, candles, has_forming_candle=False)
+
+    fake_setup = TradeSetup(
+        id="setup_bear_premium",
+        direction=Direction.BEARISH,
+        entry_price=2650.0,
+        stop_loss=2660.0,
+        take_profit=2630.0,
+        time=now,
+        confirmed_time=now + timedelta(minutes=5),
+        risk_reward_ratio=2.0,
+        status=SetupStatus.PENDING,
+        timeframe=Timeframe.M5,
+    )
+
+    # Current market bid is 2652.0 (higher than entry 2650.0, higher premium)
+    broker.symbol_info = SymbolInfo(
+        name="XAUUSD",
+        bid=2652.00,
+        ask=2652.30,
+        point_size=0.01,
+        spread_points=30.0,
+        contract_size=100.0,
+        min_volume=0.01,
+        max_volume=100.0,
+        volume_step=0.01,
+        stops_level_points=1.0,
+        freeze_level_points=0.5,
+        tick_size=0.01,
+        tick_value=1.0,
+    )
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "xau_bot.runtime.live_loop.detect_setups",
+            lambda **kwargs: [fake_setup],
+        )
+
+        event = CandleCloseEvent(
+            timeframe=Timeframe.M5,
+            candle=candles[-1],
+            closed_series=tuple(candles),
+            forming_candle=None,
+            closed_at=candles[-1].time + timedelta(minutes=5),
+        )
+        await engine.on_candle_close(event)
+
+    props = proposal_manager.get_proposals()
+    assert len(props) == 1
+    p = props[0]
+    assert p.setup_id == "setup_bear_premium"
+    assert p.intent is not None
+    assert p.intent.order_type == "SELL"
+    assert p.intent.price == 2652.00
+    # Effective SL includes spread adjustment + buffer
+    assert p.intent.stop_loss > 2660.00

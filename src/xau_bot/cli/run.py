@@ -104,6 +104,11 @@ def build_run_parser(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Timeframe(s) de gatilho de entrada separados por vírgula (ex: M1, M5, ou M1,M5)",
     )
+    parser.add_argument(
+        "--extended-ny",
+        action="store_true",
+        help="Habilita sessão estendida de Nova York (07:00 às 17:00 NY) para índices e metais",
+    )
 
 
 def configure_logging(
@@ -234,6 +239,10 @@ def run_bot_cli(
     def _is_crypto_symbol(sym: str) -> bool:
         s = sym.upper()
         return s.startswith(("BTC", "ETH", "SOL")) or "BTC" in s or "ETH" in s
+
+    def _is_index_or_metal_symbol(sym: str) -> bool:
+        s = sym.upper()
+        return any(k in s for k in ("USTEC", "NAS", "US30", "US500", "SPX", "XAU", "GOLD", "XAG"))
 
     any_is_crypto = any(_is_crypto_symbol(s) for s in symbols)
     any_enable_24_7 = (
@@ -411,12 +420,15 @@ def run_bot_cli(
     engines: list[LiveTradingEngine] = []
     for idx, sym in enumerate(symbols):
         sym_is_crypto = _is_crypto_symbol(sym)
+        sym_is_index_metal = _is_index_or_metal_symbol(sym)
         sym_enable_24_7 = (
             bool(getattr(args, "crypto_24_7", False)) or settings.crypto_24_7 or sym_is_crypto
         )
+        sym_extended_ny = bool(getattr(args, "extended_ny", False)) or sym_is_index_metal
         sym_session_filter = SessionFilter(
             server_tz=settings.broker_server_tz,
             enable_24_7=sym_enable_24_7,
+            extended_ny=sym_extended_ny,
         )
         sym_composite_filter = CompositeTradeFilter(
             session_filter=sym_session_filter,

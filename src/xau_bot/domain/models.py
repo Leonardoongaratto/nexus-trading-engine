@@ -175,6 +175,7 @@ class OrderIntent:
     magic: int
     comment: str
     expiration: datetime | None = None
+    deviation: int | None = None
 
 
 class LiquidityType(StrEnum):

@@ -241,6 +241,11 @@ class OutcomeEvaluator:
                 direction=entry.direction,
             )
 
+        theo_dist = abs(entry_p - sl_p)
+        theo_rr = round(abs(tp_p - entry_p) / theo_dist, 2) if theo_dist > 0 else 0.0
+        eff_dist = abs(entry_p - sl_p)
+        eff_rr = round(abs(tp_p - entry_p) / eff_dist, 2) if eff_dist > 0 else 0.0
+
         outcome_data = OutcomeData(
             executed=True,
             entry_price=entry_p,
@@ -257,6 +262,8 @@ class OutcomeEvaluator:
             duration_seconds=duration,
             exit_reason=exit_reason,
             post_exit_behavior=post_exit,
+            effective_rr=eff_rr,
+            theoretical_rr=theo_rr,
         )
 
         return outcome_data, outcome, loss_cause, loss_cat
@@ -284,6 +291,9 @@ class OutcomeEvaluator:
                 hit_index = idx
                 break
 
+        theo_dist = abs(entry_price - stop_loss)
+        theo_rr = round(abs(take_profit - entry_price) / theo_dist, 2) if theo_dist > 0 else 0.0
+
         if not entry_hit or hit_index < 0:
             outcome_data = OutcomeData(
                 executed=False,
@@ -291,6 +301,8 @@ class OutcomeEvaluator:
                 stop_loss=stop_loss,
                 take_profit=take_profit,
                 exit_reason="Entry level never reached",
+                effective_rr=theo_rr,
+                theoretical_rr=theo_rr,
             )
             return outcome_data, TradeOutcome.UNEXECUTED, None, None
 
@@ -369,6 +381,8 @@ class OutcomeEvaluator:
             max_r=max(mfe_r, realized_r),
             realized_r=realized_r,
             exit_reason=exit_reason,
+            effective_rr=theo_rr,
+            theoretical_rr=theo_rr,
         )
 
         return outcome_data, outcome, loss_cause, loss_cat

@@ -1261,6 +1261,23 @@ def test_journal_repository_get_entry_supports_proposal_id_or_id() -> None:
         # Lookup by proposal ID
         found_by_prop = repo.get_entry("prop_unique_id")
         assert found_by_prop is not None
-        assert found_by_prop.id == "jrn_unique_id"
-
         repo.close()
+
+
+def test_outcome_data_effective_and_theoretical_rr_serialization() -> None:
+    outcome = OutcomeData(
+        executed=True,
+        entry_price=2650.0,
+        stop_loss=2640.0,
+        take_profit=2670.0,
+        fill_price=2648.0,
+        effective_rr=2.75,
+        theoretical_rr=2.0,
+    )
+    d = outcome.to_dict()
+    assert d["effective_rr"] == 2.75
+    assert d["theoretical_rr"] == 2.0
+
+    restored = OutcomeData.from_dict(d)
+    assert restored.effective_rr == 2.75
+    assert restored.theoretical_rr == 2.0

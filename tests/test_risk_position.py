@@ -454,3 +454,63 @@ def test_independent_manual_reference_values_ac_100(
     assert res_1.success is True
     assert res_1.lot == 17.54
     assert math.isclose(res_1.loss_at_sl_usd, 99.98, abs_tol=0.01)
+
+
+def test_calculate_lot_size_effective_sl_and_spread_buffer(
+    base_account: AccountState, spec_100oz: SymbolRiskSpec
+) -> None:
+    config = PositionRiskConfig(risk_per_trade_percent=0.01)
+
+    # Bullish: base SL = 2695.00, buffer = 10 pts * 0.01 = 0.10 -> effective_sl = 2694.90
+    res_bull = calculate_lot_size(
+        account=base_account,
+        spec=spec_100oz,
+        config=config,
+        direction=Direction.BULLISH,
+        entry_price=2700.00,
+        stop_loss=2695.00,
+        adjust_sl_for_spread=True,
+        buffer_points=10.0,
+    )
+    assert res_bull.success is True
+    assert res_bull.effective_sl == 2694.90
+
+    # Bearish with spread (0.25) and buffer (0.10): base SL = 2705.00 -> effective_sl = 2705.35
+    res_bear = calculate_lot_size(
+        account=base_account,
+        spec=spec_100oz,
+        config=config,
+        direction=Direction.BEARISH,
+        entry_price=2700.00,
+        stop_loss=2705.00,
+        adjust_sl_for_spread=True,
+        buffer_points=10.0,
+    )
+    assert res_bear.success is True
+    assert res_bear.effective_sl is not None
+    assert math.isclose(res_bear.effective_sl, 2705.30, rel_tol=1e-5)
+
+
+def test_calculate_lot_size_min_sl_spread_multiplier(
+    base_account: AccountState, spec_100oz: SymbolRiskSpec
+) -> None:
+    config = PositionRiskConfig(risk_per_trade_percent=0.01)
+    # Spread is 0.25 (25 points * 0.01).
+    # If a trader gives a tiny stop of 0.10 points:
+    # With min_sl_spread_multiplier=2.0, min_dist = 0.25 * 2.0 = 0.50.
+    res = calculate_lot_size(
+        account=base_account,
+        spec=spec_100oz,
+        config=config,
+        direction=Direction.BEARISH,
+        entry_price=2700.00,
+        stop_loss=2700.10,
+        spread=0.25,
+        min_sl_spread_multiplier=2.0,
+    )
+    assert res.success is True
+    assert res.price_distance == 0.50
+    assert res.effective_sl is not None
+    assert math.isclose(res.effective_sl, 2700.50, rel_tol=1e-5)
+    # Risk loss at SL is still capped at or below target risk (100 USD)
+    assert res.loss_at_sl_usd <= 100.00 + 1e-6

@@ -8,11 +8,13 @@ class SessionName(StrEnum):
     LONDON_OPEN = "LONDON_OPEN"
     NEW_YORK_OPEN = "NEW_YORK_OPEN"
     LONDON_CLOSE = "LONDON_CLOSE"
+    NEW_YORK_AFTERNOON = "NEW_YORK_AFTERNOON"
 
 
 class TradeBlockReason(StrEnum):
     WEEKEND = "WEEKEND"
     ROLLOVER = "ROLLOVER"
+    ROLLOVER_BLACKOUT = "ROLLOVER_BLACKOUT"
     OUTSIDE_KILL_ZONE = "OUTSIDE_KILL_ZONE"
     OPENING_BLACKOUT = "OPENING_BLACKOUT"
     SPREAD_ABOVE_THRESHOLD = "SPREAD_ABOVE_THRESHOLD"
@@ -51,11 +53,15 @@ class SessionFilter:
         london_tz: str | tzinfo = "Europe/London",
         server_tz: str | tzinfo = "UTC",
         enable_24_7: bool = False,
+        extended_ny: bool = False,
+        rollover_blackout: bool = True,
     ) -> None:
         self.ny_tz = ZoneInfo(ny_tz) if isinstance(ny_tz, str) else ny_tz
         self.london_tz = ZoneInfo(london_tz) if isinstance(london_tz, str) else london_tz
         self.server_tz = ZoneInfo(server_tz) if isinstance(server_tz, str) else server_tz
         self.enable_24_7 = bool(enable_24_7)
+        self.extended_ny = bool(extended_ny)
+        self.rollover_blackout = bool(rollover_blackout)
 
     def to_server_time(self, dt: datetime) -> datetime:
         return to_server_time(dt, server_tz=self.server_tz)
@@ -81,6 +87,13 @@ class SessionFilter:
         ny = _ensure_timezone_aware(dt).astimezone(self.ny_tz)
         return 17 <= ny.hour < 18
 
+    def is_in_rollover_blackout(self, dt: datetime) -> bool:
+        if self.enable_24_7 or self.is_weekend(dt) or not self.rollover_blackout:
+            return False
+        ny = _ensure_timezone_aware(dt).astimezone(self.ny_tz)
+        ny_minutes = ny.hour * 60 + ny.minute
+        return 16 * 60 + 50 <= ny_minutes < 17 * 60
+
     def is_market_open(self, dt: datetime) -> bool:
         if self.enable_24_7:
             return True
@@ -102,6 +115,9 @@ class SessionFilter:
 
         if 15 * 60 <= london_minutes < 17 * 60:
             return True, SessionName.LONDON_CLOSE
+
+        if self.extended_ny and 10 * 60 <= ny_minutes < 17 * 60:
+            return True, SessionName.NEW_YORK_AFTERNOON
 
         utc_minutes = utc.hour * 60 + utc.minute
         if 0 <= utc_minutes < 9 * 60:
@@ -129,7 +145,10 @@ class SessionFilter:
             return False, TradeBlockReason.WEEKEND
         if self.is_in_rollover(dt):
             return False, TradeBlockReason.ROLLOVER
+        if self.is_in_rollover_blackout(dt):
+            return False, TradeBlockReason.ROLLOVER_BLACKOUT
         in_kz, _ = self.is_in_kill_zone(dt)
+
         if not in_kz:
             return False, TradeBlockReason.OUTSIDE_KILL_ZONE
         if self.is_in_opening_blackout(dt):
